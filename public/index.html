@@ -1,0 +1,1164 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>АптекиНаКарте — поиск аптек и лекарств</title>
+    <script src="https://api-maps.yandex.ru/2.1/?apikey=bc8d1a0c-5b02-48cb-8c4e-7dad586c27d5&lang=ru_RU"></script>
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#00a651">
+    <style>
+:root {
+    --primary: #00a651;
+    --primary-dark: #008c44;
+    --bg: #f0f2f5;
+    --card-bg: #ffffff;
+    --text: #1a1a1a;
+    --text-secondary: #666666;
+    --shadow: 0 4px 12px rgba(0,0,0,0.08);
+    --radius: 12px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Inter', 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); height: 100vh; display: flex; flex-direction: column; }
+header { background: var(--card-bg); padding: 12px 24px; display: flex; align-items: center; gap: 20px; box-shadow: var(--shadow); z-index: 10; }
+.logo { font-size: 20px; font-weight: 800; color: var(--primary); display: flex; align-items: center; gap: 8px; }
+.search-box { flex: 1; max-width: 500px; position: relative; }
+.search-box input { width: 100%; padding: 12px 44px 12px 16px; border: 2px solid #e0e0e0; border-radius: var(--radius); font-size: 15px; outline: none; transition: border 0.2s; }
+.search-box input:focus { border-color: var(--primary); }
+.search-box button { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); background: var(--primary); color: white; border: none; width: 36px; height: 36px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+.header-actions { display: flex; gap: 10px; }
+.btn { background: #f0f2f5; color: var(--text); border: none; padding: 10px 16px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 500; transition: all 0.2s; }
+.btn:hover { background: #e0e0e0; }
+.btn-primary { background: var(--primary); color: white; }
+.btn-primary:hover { background: var(--primary-dark); }
+.btn-danger { background: #e53935; color: white; }
+.btn-danger:hover { background: #c62828; }
+.btn-sm { padding: 6px 12px; font-size: 12px; }
+main { flex: 1; display: flex; overflow: hidden; position: relative; }
+aside { width: 380px; background: var(--card-bg); border-right: 1px solid #e0e0e0; display: flex; flex-direction: column; overflow: hidden; }
+.tabs { display: flex; border-bottom: 1px solid #eee; }
+.tab { flex: 1; padding: 14px; text-align: center; cursor: pointer; font-size: 14px; font-weight: 600; color: var(--text-secondary); border-bottom: 3px solid transparent; transition: all 0.2s; }
+.tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+.filters { padding: 12px; display: flex; gap: 8px; overflow-x: auto; border-bottom: 1px solid #eee; }
+.chip { padding: 6px 14px; border: 1px solid #e0e0e0; color: var(--text-secondary); border-radius: 20px; font-size: 13px; cursor: pointer; background: white; white-space: nowrap; }
+.chip.active { background: var(--primary); color: white; border-color: var(--primary); }
+.results-header { padding: 12px 16px; font-size: 13px; color: var(--text-secondary); border-bottom: 1px solid #eee; display: flex; justify-content: space-between; }
+.results-list { flex: 1; overflow-y: auto; scroll-behavior: smooth; }
+.card { padding: 16px; border-bottom: 1px solid #f0f0f0; cursor: pointer; transition: background 0.15s; }
+.card:hover { background: #f8faf9; }
+.card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.card-name { font-weight: 700; font-size: 15px; margin-bottom: 6px; color: var(--text); line-height: 1.3; }
+.card-addr { font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; display: flex; align-items: center; gap: 4px; }
+.card-meta { display: flex; gap: 10px; font-size: 12px; color: #888; flex-wrap: wrap; }
+.badge { display: inline-flex; align-items: center; padding: 3px 8px; border-radius: 6px; font-size: 11px; font-weight: 700; }
+.badge-open { background: #e6f4ea; color: #1e8e3e; }
+.badge-24h { background: #fef7e0; color: #b06000; }
+.badge-closed { background: #fce8e6; color: #c5221f; }
+.badge-rating { background: #fef7e0; color: #b06000; }
+.badge-admin { background: #9c27b0; color: white; }
+.fav-btn { background: none; border: none; cursor: pointer; font-size: 22px; color: #ccc; transition: color 0.2s; padding: 0; }
+.fav-btn.active { color: #e91e63; }
+#map { flex: 1; }
+.modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,0.4); backdrop-filter: blur(4px); display: none; align-items: center; justify-content: center; z-index: 100; }
+.modal-bg.show { display: flex; }
+.modal { background: white; border-radius: 16px; padding: 24px; max-width: 500px; width: 90%; max-height: 85vh; overflow-y: auto; position: relative; box-shadow: 0 20px 40px rgba(0,0,0,0.2); animation: slideUp 0.3s ease; }
+@keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+.modal-close { position: absolute; top: 16px; right: 16px; background: #f0f2f5; border: none; width: 32px; height: 32px; border-radius: 50%; cursor: pointer; font-size: 18px; color: #666; }
+.modal h2 { margin-bottom: 16px; color: var(--primary); font-size: 20px; padding-right: 30px; }
+.modal-row { padding: 10px 0; border-bottom: 1px solid #f0f0f0; font-size: 14px; display: flex; }
+.modal-row strong { color: var(--text-secondary); width: 110px; flex-shrink: 0; }
+.modal-row input, .modal-row textarea { flex: 1; padding: 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; }
+.loader { text-align: center; padding: 40px; color: var(--text-secondary); }
+.spinner { display: inline-block; width: 32px; height: 32px; border: 3px solid #e0e0e0; border-top-color: var(--primary); border-radius: 50%; animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.empty { text-align: center; padding: 40px 20px; color: var(--text-secondary); }
+.admin-panel { padding: 16px; background: #f8f0fc; border-radius: 12px; margin-bottom: 16px; }
+.admin-panel h3 { color: #9c27b0; margin-bottom: 12px; font-size: 16px; }
+.admin-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.medicine-list { margin-top: 16px; }
+.medicine-item { padding: 12px; background: #f8faf9; border-radius: 8px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
+.medicine-name { font-weight: 600; font-size: 14px; }
+.medicine-price { color: var(--primary); font-weight: 700; }
+.medicine-stock { font-size: 12px; color: #888; }
+@media (max-width: 768px) {
+    aside { width: 100%; position: absolute; bottom: 0; height: 50%; z-index: 5; border-radius: 20px 20px 0 0; box-shadow: 0 -4px 20px rgba(0,0,0,0.1); }
+    main { flex-direction: column-reverse; }
+    header { flex-wrap: wrap; gap: 10px; }
+    .search-box { order: 3; max-width: 100%; width: 100%; }
+}
+    </style>
+</head>
+<body>
+
+<header>
+    <div class="logo"><span>💊</span><span>АптекиНаКарте</span></div>
+    <div class="search-box">
+        <input type="text" id="searchInput" placeholder="Поиск аптек или лекарств...">
+        <button onclick="handleSearch()">🔍</button>
+    </div>
+    <div class="header-actions">
+        <button class="btn" onclick="locateMe()">📍 Моё место</button>
+        <button class="btn" id="adminBtn" onclick="openAdminPanel()" style="display:none;">👑 Админка</button>
+        <button class="btn" id="authBtn" onclick="openAuthModal()">👤 Войти</button>
+    </div>
+</header>
+
+<main>
+    <aside>
+        <div class="tabs">
+            <div class="tab active" data-tab="nearby">🗺️ Рядом</div>
+            <div class="tab" data-tab="medicines">💊 Лекарства</div>
+            <div class="tab" data-tab="favorites">⭐ Избранное</div>
+            <div class="tab" data-tab="stats">📊 Статистика</div>
+        </div>
+
+        <div id="tab-nearby" class="tab-content">
+            <div class="filters">
+                <div class="chip active" data-filter="all">Все</div>
+                <div class="chip" data-filter="24h">🌙 24 часа</div>
+                <div class="chip" data-filter="open">✅ Открыто</div>
+                <div class="chip" data-filter="near">📍 Ближайшие</div>
+            </div>
+            <div class="results-header">
+                <span id="resultsHeader">Загрузка...</span>
+                <span id="sourceBadge"></span>
+            </div>
+            <div class="results-list" id="resultsList">
+                <div class="loader"><div class="spinner"></div><div>Ищем аптеки...</div></div>
+            </div>
+        </div>
+
+        <div id="tab-medicines" class="tab-content" style="display:none;">
+            <div style="padding: 12px;">
+                <input type="text" id="medicineSearchInput" placeholder="Название лекарства..." style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px;">
+                <button onclick="searchMedicines()" class="btn btn-primary" style="width: 100%; margin-top: 8px;">🔍 Найти лекарства</button>
+            </div>
+            <div class="results-list" id="medicinesList"></div>
+        </div>
+
+        <div id="tab-favorites" class="tab-content" style="display:none;">
+            <div class="results-header"><span>Избранные аптеки</span></div>
+            <div class="results-list" id="favoritesList"></div>
+        </div>
+
+        <div id="tab-stats" class="tab-content" style="display:none;">
+            <div class="results-header"><span>Статистика базы данных</span></div>
+            <div id="statsContent" style="padding: 20px;"></div>
+        </div>
+    </aside>
+    <div style="position: relative; flex: 1;">
+        <div id="map" style="width: 100%; height: 100%;"></div>
+        <div id="updateIndicator" style="position: absolute; top: 20px; left: 20px; z-index: 10; background: rgba(0, 166, 81, 0.9); color: white; padding: 8px 16px; border-radius: 20px; display: none; font-size: 13px; box-shadow: 0 2px 8px rgba(0,0,0,0.2); animation: pulse 1.5s infinite;">
+    <div class="spinner" style="width: 14px; height: 14px; border-width: 2px; display: inline-block; vertical-align: middle; margin-right: 8px;"></div>
+        Обновление...
+    </div>
+            <style>
+            @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+            }
+        </style>
+        <button id="addModeBtn" onclick="toggleAddMode()" class="btn btn-primary" style="position: absolute; top: 20px; right: 20px; z-index: 10; display: none; padding: 12px 20px; font-size: 15px; box-shadow: 0 4px 12px rgba(0,0,0,0.2);">
+            ➕ Добавить аптеку
+        </button>
+        <div id="addModeIndicator" style="position: absolute; top: 70px; right: 20px; z-index: 10; background: #ff9800; color: white; padding: 8px 16px; border-radius: 8px; display: none; font-size: 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.2);">
+            🎯 Кликните по карте чтобы выбрать место
+            <button onclick="cancelAddMode()" style="background: white; color: #ff9800; border: none; padding: 2px 8px; border-radius: 4px; margin-left: 8px; cursor: pointer;">✕</button>
+        </div>
+    </div>
+</main>
+
+<div class="modal-bg" id="modalBg" onclick="if(event.target===this) closeModal()">
+    <div class="modal" id="modalContent"></div>
+</div>
+
+<div class="modal-bg" id="authModalBg" onclick="if(event.target===this) closeAuthModal()">
+    <div class="modal">
+        <button class="modal-close" onclick="closeAuthModal()">×</button>
+        <h2 id="authTitle">Вход в систему</h2>
+        <div style="display:flex; flex-direction:column; gap:12px;">
+            <input type="text" id="authName" placeholder="Ваше имя" style="display:none; padding:10px; border:1px solid #ddd; border-radius:8px;">
+            <input type="email" id="authEmail" placeholder="Email" style="padding:10px; border:1px solid #ddd; border-radius:8px;">
+            <input type="password" id="authPassword" placeholder="Пароль" style="padding:10px; border:1px solid #ddd; border-radius:8px;">
+            <button class="btn btn-primary" id="authSubmitBtn" onclick="handleAuth()">Войти</button>
+            <p style="text-align:center; font-size:13px; color:#666; margin-top:8px;">
+                <span id="authToggleText">Нет аккаунта?</span> 
+                <a href="#" onclick="toggleAuthMode(event)" style="color:var(--primary); font-weight:600;">Зарегистрироваться</a>
+            </p>
+        </div>
+    </div>
+</div>
+
+<div class="modal-bg" id="adminModalBg" onclick="if(event.target===this) closeAdminPanel()">
+    <div class="modal" style="max-width: 600px;">
+        <button class="modal-close" onclick="closeAdminPanel()">×</button>
+        <h2>👑 Панель администратора</h2>
+        <div class="admin-panel">
+            <h3>➕ Добавить аптеку</h3>
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+                <div id="coordsIndicator" style="padding: 8px; background: #e3f2fd; border-radius: 6px; font-size: 13px; color: #1565c0; display: none;">
+                    📍 Выбрано место: <strong id="coordsText"></strong>
+                    <br><small>Можно перетащить маркер на карте для уточнения</small>
+                </div>
+                <input type="text" id="adminPharmacyName" placeholder="Название аптеки" style="padding: 8px; border: 1px solid #ddd; border-radius: 6px;">
+                <input type="text" id="adminPharmacyAddress" placeholder="Адрес" style="padding: 8px; border: 1px solid #ddd; border-radius: 6px;">
+                <input type="text" id="adminPharmacyPhone" placeholder="Телефон" style="padding: 8px; border: 1px solid #ddd; border-radius: 6px;">
+                <input type="text" id="adminPharmacyHours" placeholder="Режим работы" style="padding: 8px; border: 1px solid #ddd; border-radius: 6px;">
+                <label style="display: flex; align-items: center; gap: 8px; font-size: 14px;">
+                    <input type="checkbox" id="adminPharmacy24h"> Круглосуточно
+                </label>
+                <button onclick="addPharmacyFromMap()" class="btn btn-primary" style="padding: 12px; font-size: 15px;">💾 Сохранить аптеку</button>
+                <div id="addPharmacyStatus" style="margin-top: 8px; font-size: 13px; color: #666;"></div>
+            </div>
+        </div>
+        <div class="admin-panel">
+            <h3>📋 Все аптеки</h3>
+            <div id="adminPharmaciesList" style="max-height: 200px; overflow-y: auto;">
+                <div class="loader"><div class="spinner"></div></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+const API = '';
+let myMap, placemarks = [], pharmacies = [], userCoords = null;
+let currentFilter = 'all', currentTab = 'nearby';
+let isLoginMode = true;
+let currentUser = null;
+
+ymaps.ready(init);
+
+async function init() {
+    myMap = new ymaps.Map('map', {
+        center: [55.751574, 37.573856],
+        zoom: 14,
+        controls: ['zoomControl', 'typeSelector', 'geolocationControl']
+    });
+
+    myMap.events.add('boundschange', debounce(() => {
+    if (currentTab === 'nearby') reloadPharmacies();
+    }, 3000)); 
+
+    myMap.events.add('click', function(e) {
+        if (!window.addMode) return;
+        const coords = e.get('coords');
+        window.newPharmacyCoords = coords;
+        if (window.newPharmacyMarker) myMap.geoObjects.remove(window.newPharmacyMarker);
+        window.newPharmacyMarker = new ymaps.Placemark(coords, {
+            hintContent: 'Новая аптека',
+            balloonContent: '📍 Перетащите маркер для точной настройки'
+        }, { preset: 'islands#redDotIcon', draggable: true });
+        myMap.geoObjects.add(window.newPharmacyMarker);
+        window.newPharmacyMarker.events.add('dragend', function(e) {
+            window.newPharmacyCoords = e.get('target').geometry.getCoordinates();
+        });
+        window.addMode = false;
+        document.getElementById('addModeIndicator').style.display = 'none';
+        document.getElementById('addModeBtn').style.display = '';
+        document.getElementById('map').style.cursor = '';
+        setTimeout(() => {
+            openAdminPanel();
+            const indicator = document.getElementById('coordsIndicator');
+            const coordsText = document.getElementById('coordsText');
+            if (indicator && coordsText) {
+                indicator.style.display = 'block';
+                coordsText.textContent = `${coords[0].toFixed(5)}, ${coords[1].toFixed(5)}`;
+            }
+        }, 300);
+    });
+
+    document.querySelectorAll('.tab').forEach(t => {
+        t.addEventListener('click', () => switchTab(t.dataset.tab));
+    });
+
+    document.querySelectorAll('.chip').forEach(c => {
+        c.addEventListener('click', () => {
+            document.querySelectorAll('.chip').forEach(x => x.classList.remove('active'));
+            c.classList.add('active');
+            currentFilter = c.dataset.filter;
+            applyFilter();
+        });
+    });
+
+    document.getElementById('searchInput').addEventListener('keypress', e => {
+        if (e.key === 'Enter') handleSearch();
+    });
+
+    checkAuth();
+
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(pos => {
+            userCoords = [pos.coords.latitude, pos.coords.longitude];
+            myMap.setCenter(userCoords, 15);
+            addMyMark(userCoords);
+            reloadPharmacies();
+        }, () => reloadPharmacies());
+    } else {
+        reloadPharmacies();
+    }
+}
+
+function handleSearch() {
+    const q = document.getElementById('searchInput').value.trim();
+    if (q.length < 2) return;
+    if (currentTab === 'medicines') {
+        document.getElementById('medicineSearchInput').value = q;
+        searchMedicines();
+    } else {
+        searchPharmacies();
+    }
+}
+
+function debounce(fn, delay) {
+    let t;
+    return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), delay); };
+}
+
+function switchTab(tab) {
+    currentTab = tab;
+    document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+    document.querySelectorAll('.tab-content').forEach(c => c.style.display = 'none');
+    document.getElementById('tab-' + tab).style.display = '';
+    if (tab === 'favorites') loadFavorites();
+    if (tab === 'stats') loadStats();
+    if (tab === 'medicines') {
+        document.getElementById('medicinesList').innerHTML = '<div class="empty">Введите название лекарства для поиска</div>';
+    }
+}
+
+async function reloadPharmacies(forceRefresh = false) {
+    const b = myMap.getBounds();
+    if (!b) return;
+    const [[s, w], [n, e]] = b;
+
+    const hasData = pharmacies.length > 0;
+    const updateIndicator = document.getElementById('updateIndicator');
+
+    if (!hasData) {
+        showLoader();
+    } else if (updateIndicator) {
+        updateIndicator.style.display = 'block';
+    }
+
+    try {
+        const url = `${API}/api/pharmacies?south=${s}&west=${w}&north=${n}&east=${e}${forceRefresh ? '&forceRefresh=1' : ''}`;
+        const resp = await fetch(url);
+        const data = await resp.json();
+
+        pharmacies = (data.pharmacies || []).map(p => ({
+            ...p,
+            isOpen: checkIsOpen(p.opening_hours),
+            distance: userCoords ? getDistance(userCoords[0], userCoords[1], p.lat, p.lon) : null
+        }));
+
+        const badge = document.getElementById('sourceBadge');
+        if (data.source === 'memory-cache') badge.innerHTML = '<span class="badge badge-open">⚡ кэш</span>';
+        else if (data.source === 'db-cache') badge.innerHTML = '<span class="badge badge-open">💾 БД</span>';
+        else badge.innerHTML = '<span class="badge badge-open">🌐 свежее</span>';
+
+        applyFilter();
+    } catch (err) {
+        console.error(err);
+        if (!hasData) {
+            document.getElementById('resultsList').innerHTML = '<div class="empty"><div class="empty-icon">⚠️</div>Ошибка загрузки</div>';
+        }
+    } finally {
+        if (updateIndicator) updateIndicator.style.display = 'none';
+    }
+}
+
+function applyFilter() {
+    let list = [...pharmacies];
+    if (currentFilter === '24h') list = list.filter(p => p.is_24h);
+    else if (currentFilter === 'open') list = list.filter(p => p.isOpen === true);
+    else if (currentFilter === 'near' && userCoords) list = list.filter(p => p.distance != null && p.distance <= 1);
+    if (userCoords) list.sort((a, b) => (a.distance || 999) - (b.distance || 999));
+    renderList(list);
+    renderPlacemarks(list);
+}
+
+function renderList(list) {
+    document.getElementById('resultsHeader').textContent = `Найдено: ${list.length}`;
+    const c = document.getElementById('resultsList');
+    if (!list.length) {
+        c.innerHTML = '<div class="empty"><div class="empty-icon">🔍</div>Ничего не найдено</div>';
+        return;
+    }
+    c.innerHTML = list.map(p => {
+        let status = '<span class="badge">Режим не указан</span>';
+        if (p.is_24h) status = '<span class="badge badge-24h">🌙 24 часа</span>';
+        else if (p.isOpen === true) status = '<span class="badge badge-open">Открыто</span>';
+        else if (p.isOpen === false) status = '<span class="badge badge-closed">Закрыто</span>';
+        const rating = p.rating ? `<span class="badge badge-rating">⭐ ${p.rating}</span>` : '';
+        const dist = p.distance != null ? `📏 ${p.distance.toFixed(2)} км` : '';
+        const sourceIcon = p.source === '2gis' ? '🟢' : (p.source === 'yandex' ? '🟡' : '🔵');
+        return `
+            <div class="card" onclick="selectPharmacy('${p.id}')">
+                <div class="card-head">
+                    <div style="flex:1;">
+                        <div class="card-name">${sourceIcon} ${esc(p.name)} ${status} ${rating}</div>
+                        <div class="card-addr">📍 ${esc(p.address)}</div>
+                        <div class="card-meta">
+                            ${p.phone ? `<span>📞 ${esc(p.phone)}</span>` : ''}
+                            ${dist ? `<span>${dist}</span>` : ''}
+                        </div>
+                    </div>
+                    <button class="fav-btn ${p.isFavorite ? 'active' : ''}" onclick="event.stopPropagation(); toggleFavorite('${p.id}', this)">
+                        ${p.isFavorite ? '★' : '☆'}
+                    </button>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+let clusterer = null;
+
+function renderPlacemarks(list) {
+    placemarks.forEach(pm => myMap.geoObjects.remove(pm));
+    placemarks = [];
+
+    list.forEach((p, i) => {
+        const preset = p.is_24h ? 'islands#nightCircleIcon' : 'islands#greenCircleIcon';
+        const pm = new ymaps.Placemark([p.lat, p.lon], {
+            balloonContentHeader: `<strong>${esc(p.name)}</strong>`,
+            balloonContentBody: `
+                <div>📍 ${esc(p.address)}</div>
+                ${p.phone ? `<div>📞 ${esc(p.phone)}</div>` : ''}
+                ${p.opening_hours ? `<div>🕒 ${esc(p.opening_hours)}</div>` : ''}
+                ${p.rating ? `<div>⭐ Рейтинг: ${p.rating}</div>` : ''}
+                <div style="margin-top: 10px;"><button onclick="selectPharmacy('${p.id}')" style="background: var(--primary); color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 13px;">Подробнее</button></div>
+            `,
+            hintContent: p.name
+        }, { preset, iconCaption: String(i + 1) });
+        
+        pm.events.add('click', function() {
+            selectPharmacy(p.id);
+        });
+        
+        myMap.geoObjects.add(pm);
+        placemarks.push(pm);
+    });
+}
+
+async function searchPharmacies() {
+    const q = document.getElementById('searchInput').value.trim();
+    if (q.length < 2) return;
+    document.getElementById('resultsList').innerHTML = '<div class="loader"><div class="spinner"></div><div>Ищем...</div></div>';
+    try {
+        const resp = await fetch(`${API}/api/search?q=${encodeURIComponent(q)}`);
+        const data = await resp.json();
+        if (data.pharmacies.length === 0) {
+            document.getElementById('resultsList').innerHTML = '<div class="empty">Ничего не найдено по запросу</div>';
+            return;
+        }
+        pharmacies = data.pharmacies.map(p => ({
+            ...p,
+            isOpen: checkIsOpen(p.opening_hours),
+            distance: userCoords ? getDistance(userCoords[0], userCoords[1], p.lat, p.lon) : null
+        }));
+        renderList(pharmacies);
+        renderPlacemarks(pharmacies);
+        if (pharmacies.length > 0) myMap.setCenter([pharmacies[0].lat, pharmacies[0].lon], 15);
+    } catch (err) {
+        console.error(err);
+        document.getElementById('resultsList').innerHTML = '<div class="empty">Ошибка поиска</div>';
+    }
+}
+
+async function searchMedicines() {
+    const q = document.getElementById('medicineSearchInput').value.trim();
+    if (q.length < 2) return;
+    const list = document.getElementById('medicinesList');
+    list.innerHTML = '<div class="loader"><div class="spinner"></div><div>Ищем лекарства...</div></div>';
+    try {
+        const resp = await fetch(`${API}/api/search-medicine?q=${encodeURIComponent(q)}`);
+        const data = await resp.json();
+        if (data.results.length === 0) {
+            list.innerHTML = '<div class="empty">Лекарство не найдено</div>';
+            return;
+        }
+        list.innerHTML = data.results.map(r => `
+            <div class="card" onclick="selectPharmacy('${r.pharmacy_id}')">
+                <div class="card-name">${esc(r.pharmacy_name)}</div>
+                <div class="card-addr">💊 ${esc(r.medicine_name)}</div>
+                <div class="card-meta">
+                    <span class="medicine-price">${r.price ? r.price + ' ₽' : 'Цена не указана'}</span>
+                    <span>${esc(r.address)}</span>
+                    ${r.phone ? `<span>📞 ${esc(r.phone)}</span>` : ''}
+                </div>
+            </div>
+        `).join('');
+    } catch (err) {
+        console.error(err);
+        list.innerHTML = '<div class="empty">Ошибка поиска</div>';
+    }
+}
+
+async function selectPharmacy(id) {
+    try {
+        const resp = await fetch(`${API}/api/pharmacy/${id}`);
+        const p = await resp.json();
+        if (p.error) { alert(p.error); return; }
+        myMap.setCenter([p.lat, p.lon], 17, { duration: 300 });
+        const modal = document.getElementById('modalContent');
+        let adminButtons = '';
+        let medicineForm = '';
+        if (currentUser && currentUser.role === 'admin') {
+            adminButtons = `
+                <div style="margin-top:16px; padding:12px; background:#f8f0fc; border-radius:8px;">
+                    <div style="font-weight:600; color:#9c27b0; margin-bottom:8px;">👑 Администрирование</div>
+                    <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                        <button class="btn btn-sm" onclick="editPharmacy('${p.id}')">✏️ Редактировать</button>
+                        <button class="btn btn-sm btn-danger" onclick="deletePharmacy('${p.id}')">🗑️ Удалить</button>
+                    </div>
+                </div>
+            `;
+            medicineForm = `
+                <div style="margin-top:16px; padding:12px; background:#e8f5e9; border-radius:8px;">
+                    <div style="font-weight:600; color:#2e7d32; margin-bottom:12px;">💊 Добавить лекарство</div>
+                    <div style="display:flex; flex-direction:column; gap:8px;">
+                        <input type="text" id="medName" placeholder="Название лекарства" style="padding:8px; border:1px solid #ddd; border-radius:6px;">
+                        <input type="number" id="medPrice" placeholder="Цена (₽)" style="padding:8px; border:1px solid #ddd; border-radius:6px;">
+                        <textarea id="medDesc" placeholder="Описание (дозировка, производитель)" style="padding:8px; border:1px solid #ddd; border-radius:6px; min-height:60px;"></textarea>
+                        <label style="display:flex; align-items:center; gap:8px; font-size:14px;">
+                            <input type="checkbox" id="medInStock" checked> В наличии
+                        </label>
+                        <button onclick="addMedicine('${p.id}')" class="btn btn-primary btn-sm">➕ Добавить</button>
+                        <button onclick="showImportForm('${p.id}')" class="btn btn-sm" style="background:#ff9800; color:white;">📥 Импорт CSV</button>
+                        <button onclick="exportMedicines('${p.id}')" class="btn btn-sm" style="background:#607d8b; color:white;">📤 Экспорт CSV</button>
+                    </div>
+                </div>
+            `;
+        }
+        let medicinesHtml = '';
+        if (p.medicines && p.medicines.length > 0) {
+            medicinesHtml = `
+                <div style="margin-top:16px;">
+                    <div style="font-weight:600; margin-bottom:8px;">💊 Лекарства в наличии (${p.medicines.length}):</div>
+                    <div class="medicine-list">
+                        ${p.medicines.map(m => `
+                            <div class="medicine-item" style="position:relative;">
+                                <div style="flex:1;">
+                                    <div class="medicine-name">${esc(m.name)}</div>
+                                    ${m.description ? `<div style="font-size:12px; color:#666;">${esc(m.description)}</div>` : ''}
+                                </div>
+                                <div style="text-align:right;">
+                                    <div class="medicine-price">${m.price ? m.price + ' ₽' : ''}</div>
+                                    <div class="medicine-stock">${m.in_stock ? '✅ В наличии' : '❌ Нет'}</div>
+                                    ${currentUser?.role === 'admin' ? `<button onclick="deleteMedicine(${m.id})" class="btn btn-sm btn-danger" style="margin-top:4px;">🗑️</button>` : ''}
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        } else {
+            medicinesHtml = '<div style="margin-top:16px; padding:12px; background:#f5f5f5; border-radius:8px; text-align:center; color:#666;">💊 Нет лекарств в базе<br><small>Администратор может добавить</small></div>';
+        }
+        modal.innerHTML = `
+            <button class="modal-close" onclick="closeModal()">×</button>
+            <h2>💊 ${esc(p.name)}</h2>
+            <div class="modal-row"><strong>Источник:</strong> ${p.source === '2gis' ? '🟢 2GIS' : (p.source === 'yandex' ? '🟡 Яндекс' : '🔵 OSM')}</div>
+            <div class="modal-row"><strong>Адрес:</strong> ${esc(p.address)}</div>
+            ${p.phone ? `<div class="modal-row"><strong>Телефон:</strong> <a href="tel:${p.phone}">${esc(p.phone)}</a></div>` : ''}
+            ${p.website ? `<div class="modal-row"><strong>Сайт:</strong> <a href="${p.website}" target="_blank">${esc(p.website)}</a></div>` : ''}
+            ${p.opening_hours ? `<div class="modal-row"><strong>Режим:</strong> ${esc(p.opening_hours)}</div>` : ''}
+            ${p.rating ? `<div class="modal-row"><strong>Рейтинг:</strong> ⭐ ${p.rating} (${p.reviews_count || 0} отзывов)</div>` : ''}
+            ${p.distance != null ? `<div class="modal-row"><strong>Расстояние:</strong> ${p.distance.toFixed(2)} км</div>` : ''}
+            <div class="modal-row"><strong>Координаты:</strong> ${p.lat.toFixed(5)}, ${p.lon.toFixed(5)}</div>
+            ${medicinesHtml}
+            ${medicineForm}
+            <div style="margin-top:16px; display:flex; gap:8px; flex-wrap:wrap;">
+                <button class="btn" style="background:#2196F3; border:none; color:white;" onclick="window.open('https://yandex.ru/maps/?pt=${p.lon},${p.lat}&z=17', '_blank')">🗺️ На Яндекс.Картах</button>
+                <button class="btn" style="background:#e91e63; border:none; color:white;" onclick="toggleFavorite('${p.id}')">
+                    ${p.isFavorite ? '💔 Из избранного' : '⭐ В избранное'}
+                </button>
+            </div>
+            ${adminButtons}
+        `;
+        document.getElementById('modalBg').classList.add('show');
+    } catch (err) {
+        alert('Ошибка: ' + err.message);
+    }
+}
+
+async function addMedicine(pharmacyId) {
+    const name = document.getElementById('medName').value.trim();
+    const price = document.getElementById('medPrice').value;
+    const description = document.getElementById('medDesc').value.trim();
+    const in_stock = document.getElementById('medInStock').checked;
+    if (!name) { alert('Введите название лекарства'); return; }
+    try {
+        const resp = await fetch('/api/admin/medicines', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${localStorage.getItem('token')}`
+            },
+            body: JSON.stringify({ pharmacyId, name, price: price ? parseFloat(price) : null, description, in_stock })
+        });
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.error);
+        alert('✅ Лекарство добавлено!');
+        document.getElementById('medName').value = '';
+        document.getElementById('medPrice').value = '';
+        document.getElementById('medDesc').value = '';
+        document.getElementById('medInStock').checked = true;
+        selectPharmacy(pharmacyId);
+    } catch (err) {
+        alert('Ошибка: ' + err.message);
+    }
+}
+
+async function deleteMedicine(medicineId) {
+    if (!confirm('Удалить это лекарство?')) return;
+    try {
+        const resp = await fetch(`/api/admin/medicines/${medicineId}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
+        if (resp.ok) {
+            location.reload();
+            alert('✅ Лекарство удалено');
+        } else {
+            const data = await resp.json();
+            alert('Ошибка: ' + data.error);
+        }
+    } catch (err) {
+        alert('Ошибка: ' + err.message);
+    }
+}
+
+function showImportForm(pharmacyId) {
+    const importModal = document.createElement('div');
+    importModal.id = 'importModalBg';
+    importModal.className = 'modal-bg show';
+    importModal.innerHTML = `
+        <div class="modal" style="max-width: 600px;">
+            <button class="modal-close" onclick="closeImportModal()">×</button>
+            <h2>📥 Импорт лекарств из CSV</h2>
+            <div style="padding: 16px; background: #e3f2fd; border-radius: 8px; margin-bottom: 16px;">
+                <div style="font-weight: 600; margin-bottom: 8px;">📋 Формат CSV файла:</div>
+                <code style="display: block; background: white; padding: 12px; border-radius: 6px; font-size: 12px; line-height: 1.6;">
+                    Название,Цена,В наличии,Описание<br>
+                    Парацетамол 500мг,50,Да,Таблетки 10 шт<br>
+                    Ибупрофен 200мг,80,Да,Таблетки 20 шт<br>
+                    Аспирин,120,Нет,Шипучие таблетки
+                </code>
+                <div style="font-size: 12px; color: #666; margin-top: 8px;">💡 Колонки "Цена", "В наличии", "Описание" — необязательные</div>
+            </div>
+            <div style="margin-bottom: 16px;">
+                <label style="display: block; margin-bottom: 8px; font-weight: 600;">Выберите CSV файл:</label>
+                <input type="file" id="csvFileInput" accept=".csv,.txt" style="width: 100%; padding: 10px; border: 2px dashed #ddd; border-radius: 8px; cursor: pointer;">
+            </div>
+            <div style="margin-bottom: 16px;">
+                <label style="display: block; margin-bottom: 8px; font-weight: 600;">Или вставьте данные вручную:</label>
+                <textarea id="csvTextInput" placeholder="Вставьте CSV данные сюда..." style="width: 100%; min-height: 150px; padding: 10px; border: 1px solid #ddd; border-radius: 8px; font-family: monospace; font-size: 12px;"></textarea>
+            </div>
+            <div id="importPreview" style="margin-bottom: 16px;"></div>
+            <div style="display: flex; gap: 8px;">
+                <button onclick="previewImport()" class="btn" style="flex:1;">👁️ Предпросмотр</button>
+                <button onclick="executeImport('${pharmacyId}')" class="btn btn-primary" style="flex:1;">✅ Импортировать</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(importModal);
+}
+
+function closeImportModal() {
+    const modal = document.getElementById('importModalBg');
+    if (modal) modal.remove();
+}
+
+function parseCSV(text) {
+    const lines = text.trim().split('\n');
+    const medicines = [];
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (!line) continue;
+        if (i === 0 && /название|name/i.test(line)) continue;
+        const parts = [];
+        let current = '';
+        let inQuotes = false;
+        for (let j = 0; j < line.length; j++) {
+            const char = line[j];
+            if (char === '"') inQuotes = !inQuotes;
+            else if (char === ',' && !inQuotes) { parts.push(current.trim()); current = ''; }
+            else current += char;
+        }
+        parts.push(current.trim());
+        const [name, price, inStock, description] = parts;
+        if (name) {
+            medicines.push({
+                name: name.replace(/^"|"$/g, ''),
+                price: price ? parseFloat(price) : null,
+                in_stock: inStock ? !/нет|no|false|0/i.test(inStock) : true,
+                description: description ? description.replace(/^"|"$/g, '') : null
+            });
+        }
+    }
+    return medicines;
+}
+
+function previewImport() {
+    let csvText = document.getElementById('csvTextInput').value;
+    const fileInput = document.getElementById('csvFileInput');
+    if (fileInput.files.length > 0) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            document.getElementById('csvTextInput').value = e.target.result;
+            showPreview(parseCSV(e.target.result));
+        };
+        reader.readAsText(fileInput.files[0], 'UTF-8');
+    } else if (csvText.trim()) {
+        showPreview(parseCSV(csvText));
+    } else {
+        alert('Выберите файл или вставьте данные');
+    }
+}
+
+function showPreview(medicines) {
+    const preview = document.getElementById('importPreview');
+    if (medicines.length === 0) {
+        preview.innerHTML = '<div style="color:#c5221f;">❌ Не удалось распознать данные</div>';
+        return;
+    }
+    preview.innerHTML = `
+        <div style="padding: 12px; background: #e8f5e9; border-radius: 8px;">
+            <div style="font-weight: 600; color: #2e7d32; margin-bottom: 8px;">✅ Найдено ${medicines.length} лекарств:</div>
+            <div style="max-height: 200px; overflow-y: auto; font-size: 13px;">
+                ${medicines.slice(0, 10).map((m, i) => `
+                    <div style="padding: 4px 0; border-bottom: 1px solid #c8e6c9;">
+                        ${i + 1}. <strong>${esc(m.name)}</strong>
+                        ${m.price ? ` — ${m.price} ₽` : ''}
+                        ${m.in_stock ? ' ✅' : ' ❌'}
+                        ${m.description ? `<br><small style="color:#666;">${esc(m.description)}</small>` : ''}
+                    </div>
+                `).join('')}
+                ${medicines.length > 10 ? `<div style="color:#666; padding-top:4px;">... и ещё ${medicines.length - 10}</div>` : ''}
+            </div>
+        </div>
+    `;
+    window._importMedicines = medicines;
+}
+
+async function executeImport(pharmacyId) {
+    let medicines = window._importMedicines;
+    if (!medicines) {
+        let csvText = document.getElementById('csvTextInput').value;
+        const fileInput = document.getElementById('csvFileInput');
+        if (fileInput.files.length > 0) {
+            const text = await fileInput.files[0].text();
+            medicines = parseCSV(text);
+        } else if (csvText.trim()) {
+            medicines = parseCSV(csvText);
+        } else {
+            alert('Сначала выберите файл или вставьте данные');
+            return;
+        }
+    }
+    if (!medicines || medicines.length === 0) { alert('Нет данных для импорта'); return; }
+    try {
+        const resp = await fetch('/api/admin/medicines/import', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${localStorage.getItem('token')}`
+            },
+            body: JSON.stringify({ pharmacyId, medicines })
+        });
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.error);
+        let message = `✅ Успешно импортировано: ${data.imported} лекарств`;
+        if (data.errors && data.errors.length > 0) message += `\n\n⚠️ Ошибки:\n${data.errors.join('\n')}`;
+        alert(message);
+        closeImportModal();
+        selectPharmacy(pharmacyId);
+    } catch (err) {
+        alert('Ошибка импорта: ' + err.message);
+    }
+}
+
+async function exportMedicines(pharmacyId) {
+    try {
+        const resp = await fetch(`/api/admin/medicines/${pharmacyId}/export`, {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
+        if (!resp.ok) throw new Error('Ошибка экспорта');
+        const blob = await resp.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `medicines_${pharmacyId}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+    } catch (err) {
+        alert('Ошибка: ' + err.message);
+    }
+}
+
+function closeModal() {
+    document.getElementById('modalBg').classList.remove('show');
+}
+
+async function checkAuth() {
+    const token = localStorage.getItem('token');
+    if (token) {
+        try {
+            const resp = await fetch('/api/me', { headers: { 'Authorization': `Bearer ${token}` } });
+            if (resp.ok) {
+                const data = await resp.json();
+                currentUser = data.user;
+                updateAuthUI();
+            } else {
+                localStorage.removeItem('token');
+            }
+        } catch (e) { console.error(e); }
+    }
+}
+
+function updateAuthUI() {
+    const btn = document.getElementById('authBtn');
+    const adminBtn = document.getElementById('adminBtn');
+    const addModeBtn = document.getElementById('addModeBtn');
+    if (currentUser) {
+        btn.textContent = `👤 ${currentUser.name}`;
+        btn.onclick = logout;
+        if (currentUser.role === 'admin') {
+            adminBtn.style.display = '';
+            addModeBtn.style.display = '';
+        } else {
+            adminBtn.style.display = 'none';
+            addModeBtn.style.display = 'none';
+        }
+    } else {
+        btn.textContent = '👤 Войти';
+        btn.onclick = openAuthModal;
+        adminBtn.style.display = 'none';
+        addModeBtn.style.display = 'none';
+    }
+}
+
+function openAuthModal() { document.getElementById('authModalBg').classList.add('show'); }
+function closeAuthModal() { document.getElementById('authModalBg').classList.remove('show'); }
+
+function toggleAuthMode(e) {
+    e.preventDefault();
+    isLoginMode = !isLoginMode;
+    document.getElementById('authTitle').textContent = isLoginMode ? 'Вход в систему' : 'Регистрация';
+    document.getElementById('authName').style.display = isLoginMode ? 'none' : 'block';
+    document.getElementById('authSubmitBtn').textContent = isLoginMode ? 'Войти' : 'Зарегистрироваться';
+    document.getElementById('authToggleText').textContent = isLoginMode ? 'Нет аккаунта?' : 'Уже есть аккаунт?';
+    e.target.textContent = isLoginMode ? 'Зарегистрироваться' : 'Войти';
+}
+
+async function handleAuth() {
+    const email = document.getElementById('authEmail').value;
+    const password = document.getElementById('authPassword').value;
+    const name = document.getElementById('authName').value;
+    const endpoint = isLoginMode ? '/api/login' : '/api/register';
+    const body = isLoginMode ? { email, password } : { email, password, name };
+    try {
+        const resp = await fetch(endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        });
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.error);
+        localStorage.setItem('token', data.token);
+        currentUser = data.user;
+        updateAuthUI();
+        closeAuthModal();
+        alert(isLoginMode ? `Добро пожаловать, ${currentUser.name}!` : 'Регистрация успешна!');
+    } catch (err) {
+        alert('Ошибка: ' + err.message);
+    }
+}
+
+function logout() {
+    localStorage.removeItem('token');
+    currentUser = null;
+    updateAuthUI();
+    alert('Вы вышли из системы');
+}
+
+function openAdminPanel() {
+    if (!currentUser || currentUser.role !== 'admin') { alert('Требуются права администратора'); return; }
+    document.getElementById('adminModalBg').classList.add('show');
+    loadAdminPharmacies();
+}
+
+function closeAdminPanel() { document.getElementById('adminModalBg').classList.remove('show'); }
+
+async function loadAdminPharmacies() {
+    const list = document.getElementById('adminPharmaciesList');
+    try {
+        const resp = await fetch('/api/admin/pharmacies', {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
+        const data = await resp.json();
+        if (data.pharmacies.length === 0) { list.innerHTML = '<div class="empty">Нет аптек</div>'; return; }
+        list.innerHTML = data.pharmacies.map(p => `
+            <div style="padding:8px; background:#f8faf9; border-radius:6px; margin-bottom:6px; display:flex; justify-content:space-between; align-items:center;">
+                <div style="font-size:13px; flex:1;">
+                    <div style="font-weight:600;">${esc(p.name)}</div>
+                    <div style="color:#666; font-size:12px;">${esc(p.address)}</div>
+                </div>
+                <div style="display:flex; gap:4px;">
+                    <button class="btn btn-sm" onclick="editPharmacy('${p.id}')">✏️</button>
+                    <button class="btn btn-sm btn-danger" onclick="deletePharmacy('${p.id}')">🗑️</button>
+                </div>
+            </div>
+        `).join('');
+    } catch (err) {
+        list.innerHTML = '<div class="empty">Ошибка загрузки</div>';
+    }
+}
+
+async function addPharmacyFromMap() {
+    if (!window.newPharmacyCoords) {
+        alert('⚠️ Сначала кликните кнопку "➕ Добавить аптеку" на карте, затем выберите место на карте!');
+        return;
+    }
+    const name = document.getElementById('adminPharmacyName').value.trim();
+    const address = document.getElementById('adminPharmacyAddress').value.trim();
+    const phone = document.getElementById('adminPharmacyPhone').value.trim();
+    const opening_hours = document.getElementById('adminPharmacyHours').value.trim();
+    const is_24h = document.getElementById('adminPharmacy24h').checked;
+    if (!name) { alert('⚠️ Введите название аптеки'); document.getElementById('adminPharmacyName').focus(); return; }
+    const token = localStorage.getItem('token');
+    if (!token) { alert('Ошибка авторизации. Войдите заново.'); return; }
+    const statusEl = document.getElementById('addPharmacyStatus');
+    if (statusEl) statusEl.textContent = '⏳ Сохраняем...';
+    try {
+        const resp = await fetch('/api/admin/pharmacies', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+                name, address, phone, opening_hours, is_24h,
+                lat: window.newPharmacyCoords[0],
+                lon: window.newPharmacyCoords[1]
+            })
+        });
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.error || 'Неизвестная ошибка');
+        if (statusEl) statusEl.innerHTML = '<span style="color:#1e8e3e;">✅ Аптека успешно добавлена!</span>';
+        setTimeout(() => {
+            document.getElementById('adminPharmacyName').value = '';
+            document.getElementById('adminPharmacyAddress').value = '';
+            document.getElementById('adminPharmacyPhone').value = '';
+            document.getElementById('adminPharmacyHours').value = '';
+            document.getElementById('adminPharmacy24h').checked = false;
+            document.getElementById('coordsIndicator').style.display = 'none';
+            if (statusEl) statusEl.textContent = '';
+        }, 2000);
+        if (window.newPharmacyMarker) {
+            myMap.geoObjects.remove(window.newPharmacyMarker);
+            window.newPharmacyMarker = null;
+        }
+        window.newPharmacyCoords = null;
+        loadAdminPharmacies();
+        reloadPharmacies(true);
+    } catch (err) {
+        console.error(err);
+        if (statusEl) statusEl.innerHTML = `<span style="color:#c5221f;">❌ ${err.message}</span>`;
+        alert('Ошибка: ' + err.message);
+    }
+}
+
+async function editPharmacy(id) {
+    const name = prompt('Название:', document.querySelector('.card-name')?.textContent || '');
+    if (!name) return;
+    try {
+        const resp = await fetch(`/api/admin/pharmacies/${id}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${localStorage.getItem('token')}`
+            },
+            body: JSON.stringify({ name })
+        });
+        if (resp.ok) {
+            alert('✅ Изменения сохранены');
+            closeModal();
+            reloadPharmacies(true);
+        } else {
+            const data = await resp.json();
+            alert('Ошибка: ' + data.error);
+        }
+    } catch (err) {
+        alert('Ошибка: ' + err.message);
+    }
+}
+
+async function deletePharmacy(id) {
+    if (!confirm('Удалить эту аптеку?')) return;
+    try {
+        const resp = await fetch(`/api/admin/pharmacies/${id}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
+        if (resp.ok) {
+            alert('✅ Аптека удалена');
+            closeModal();
+            reloadPharmacies(true);
+        } else {
+            const data = await resp.json();
+            alert('Ошибка: ' + data.error);
+        }
+    } catch (err) {
+        alert('Ошибка: ' + err.message);
+    }
+}
+
+async function toggleFavorite(id, btnEl) {
+    try {
+        const check = await fetch(`${API}/api/favorites/check/${id}`);
+        const { isFavorite } = await check.json();
+        if (isFavorite) {
+            await fetch(`${API}/api/favorites/${id}`, { method: 'DELETE' });
+        } else {
+            await fetch(`${API}/api/favorites`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ pharmacyId: id })
+            });
+        }
+        const p = pharmacies.find(x => x.id === id);
+        if (p) p.isFavorite = !isFavorite;
+        if (btnEl) {
+            btnEl.classList.toggle('active');
+            btnEl.textContent = !isFavorite ? '★' : '☆';
+        }
+        if (currentTab === 'favorites') loadFavorites();
+    } catch (err) {
+        alert('Ошибка: ' + err.message);
+    }
+}
+
+async function loadFavorites() {
+    const c = document.getElementById('favoritesList');
+    c.innerHTML = '<div class="loader"><div class="spinner"></div></div>';
+    try {
+        const resp = await fetch(`${API}/api/favorites`);
+        const { favorites } = await resp.json();
+        if (!favorites.length) {
+            c.innerHTML = '<div class="empty"><div class="empty-icon">⭐</div>Нет избранных аптек<br><small>Нажмите ☆ у любой аптеки</small></div>';
+            return;
+        }
+        c.innerHTML = favorites.map(p => `
+            <div class="card" onclick="selectPharmacy('${p.id}')">
+                <div class="card-name">⭐ ${esc(p.name)}</div>
+                <div class="card-addr">📍 ${esc(p.address)}</div>
+                ${p.note ? `<div class="card-meta">📝 ${esc(p.note)}</div>` : ''}
+            </div>
+        `).join('');
+    } catch (err) {
+        c.innerHTML = '<div class="empty">Ошибка загрузки</div>';
+    }
+}
+
+async function loadStats() {
+    const c = document.getElementById('statsContent');
+    try {
+        const resp = await fetch(`${API}/api/stats`);
+        const s = await resp.json();
+        c.innerHTML = `
+            <div style="font-size:14px; line-height:2;">
+                <div>📦 <strong>Всего аптек:</strong> ${s.total}</div>
+                <div>🟢 <strong>Из 2GIS:</strong> ${s.gis_count}</div>
+                <div>🔵 <strong>Из OSM:</strong> ${s.osm_count}</div>
+                <div>🔷 <strong>Добавлено вручную:</strong> ${s.manual_count}</div>
+                <div>🌙 <strong>Круглосуточных:</strong> ${s.round_the_clock}</div>
+                <div>💊 <strong>Лекарств:</strong> ${s.medicines_count}</div>
+                <div>⭐ <strong>В избранном:</strong> ${s.favorites_count}</div>
+                <div>👥 <strong>Пользователей:</strong> ${s.users_count}</div>
+            </div>
+        `;
+    } catch (err) {
+        c.innerHTML = '<div class="empty">Ошибка</div>';
+    }
+}
+
+function checkIsOpen(oh) {
+    if (!oh) return null;
+    if (/24\/7/i.test(oh)) return true;
+    try {
+        const days = ['Su','Mo','Tu','We','Th','Fr','Sa'];
+        const now = new Date();
+        const today = days[now.getDay()];
+        const minutes = now.getHours() * 60 + now.getMinutes();
+        const regex = new RegExp(today + '\\s+(\\d{2}):(\\d{2})-(\\d{2}):(\\d{2})', 'i');
+        const match = oh.match(regex);
+        if (match) {
+            const open = parseInt(match[1]) * 60 + parseInt(match[2]);
+            const close = parseInt(match[3]) * 60 + parseInt(match[4]);
+            return minutes >= open && minutes <= close;
+        }
+    } catch(e) {}
+    return null;
+}
+
+function getDistance(lat1, lon1, lat2, lon2) {
+    const R = 6371;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+function addMyMark(coords) {
+    myMap.geoObjects.add(new ymaps.Placemark(coords, { hintContent: 'Вы здесь' }, { preset: 'islands#blueCircleDotIcon' }));
+}
+
+function locateMe() {
+    if (!navigator.geolocation) { alert('Геолокация недоступна'); return; }
+    navigator.geolocation.getCurrentPosition(pos => {
+        userCoords = [pos.coords.latitude, pos.coords.longitude];
+        myMap.setCenter(userCoords, 16);
+        addMyMark(userCoords);
+        reloadPharmacies();
+    }, err => alert('Ошибка: ' + err.message));
+}
+
+function showLoader() {
+    document.getElementById('resultsList').innerHTML = '<div class="loader"><div class="spinner"></div><div>Ищем аптеки...</div></div>';
+}
+
+function esc(s) {
+    if (s == null) return '';
+    return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function toggleAddMode() {
+    if (!currentUser || currentUser.role !== 'admin') { alert('Требуются права администратора'); return; }
+    window.addMode = true;
+    document.getElementById('addModeIndicator').style.display = 'block';
+    document.getElementById('addModeBtn').style.display = 'none';
+    document.getElementById('map').style.cursor = 'crosshair';
+    alert('🎯 Режим добавления аптеки активирован!\n\nКликните по карте где должна быть аптека.\nМаркер можно будет перетаскивать.');
+}
+
+function cancelAddMode() {
+    window.addMode = false;
+    document.getElementById('addModeIndicator').style.display = 'none';
+    document.getElementById('addModeBtn').style.display = '';
+    document.getElementById('map').style.cursor = '';
+    if (window.newPharmacyMarker) {
+        myMap.geoObjects.remove(window.newPharmacyMarker);
+        window.newPharmacyMarker = null;
+    }
+    window.newPharmacyCoords = null;
+}
+</script>
+
+</body>
+</html>
