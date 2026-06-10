@@ -196,9 +196,8 @@ app.get('/api/pharmacies', async (req, res) => {
             setCache(cacheKey, dbPharmacies);
             res.json({ source: 'db', count: dbPharmacies.length, pharmacies: dbPharmacies });
             
-            // 4. Фоном обновляем данные из API (если кэш старый или forceRefresh)
             const cacheAge = getCached(cacheKey)?.time || 0;
-            const isOld = Date.now() - cacheAge > 60 * 60 * 1000; // 1 час
+            const isOld = Date.now() - cacheAge > 60 * 60 * 1000; 
             
             if (forceRefresh || isOld) {
                 setTimeout(async () => {
@@ -226,7 +225,6 @@ app.get('/api/pharmacies', async (req, res) => {
                 }, 100);
             }
         } else {
-            // Если в БД нет данных - идём к API
             const pharmacies = [];
             try {
                 const gisData = await fetchFrom2GIS(s, w, n, e);
